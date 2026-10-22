@@ -23,7 +23,7 @@ jobs:
             sudo dpkg-statoverride --update --add root root 0644 /boot/vmlinuz-$(uname -r)
 
       - run:
-          name: 定制镜像
+          name: 定制镜像（适配阿里云与通用 KVM）
           command: |
             virt-customize -a debian-13.qcow2 \
               --smp 2 \
@@ -34,13 +34,17 @@ jobs:
               --run-command "systemctl enable serial-getty@ttyS1.service" \
               --run-command "sed -i 's|Types: deb deb-src|Types: deb|g' /etc/apt/sources.list.d/debian.sources" \
               --run-command "sed -i 's|generate_mirrorlists: true|generate_mirrorlists: false|g' /etc/cloud/cloud.cfg.d/01_debian_cloud.cfg" \
+              --run-command "sed -i 's/disable_root: true/disable_root: false/g' /etc/cloud/cloud.cfg" \
+              --run-command "sed -i 's/ssh_pwauth: false/ssh_pwauth: true/g' /etc/cloud/cloud.cfg" \
+              --run-command "mkdir -p /etc/ssh/sshd_config.d && printf 'PermitRootLogin yes\nPasswordAuthentication yes\n' > /etc/ssh/sshd_config.d/99-cloud-root.conf" \
+              --run-command "mkdir -p /etc/systemd/journald.conf.d && printf '[Journal]\nSystemMaxUse=30M\n' > /etc/systemd/journald.conf.d/size.conf" \
+              --run-command "mkdir -p /etc/chrony/conf.d && printf 'server ntp.cloud.aliyuncs.com iburst\nserver time.apple.com iburst\nserver time.windows.com iburst\n' > /etc/chrony/conf.d/custom-ntp.conf" \
               --update \
-              --install "sudo,qemu-guest-agent,spice-vdagent,bash-completion,unzip,wget,curl,axel,net-tools,iputils-ping,iputils-arping,iputils-tracepath,nano,most,screen,less,vim,bzip2,lldpd,mtr-tiny,htop,dnsutils,zstd" \
+              --install "sudo,qemu-guest-agent,bash-completion,unzip,wget,curl,axel,net-tools,iputils-ping,iputils-arping,iputils-tracepath,nano,most,screen,less,vim,bzip2,lldpd,mtr-tiny,htop,bind9-dnsutils,zstd" \
               --run-command "apt-get -y autoremove --purge && apt-get -y clean" \
-              --append-line "/etc/systemd/timesyncd.conf:NTP=time.apple.com time.windows.com" \
+              --run-command "cloud-init clean --logs --seed" \
               --delete "/var/log/*.log" \
               --delete "/var/lib/apt/lists/*" \
-              --delete "/var/cache/apt/*" \
               --truncate "/etc/machine-id"
 
       - run:
